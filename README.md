@@ -13,6 +13,13 @@ This is the **analytics layer** -- the telescope, not the gun.
 
 ---
 
+## At a Glance
+
+- Unified connectors for Polymarket, Kalshi, Metaculus, and Manifold
+- Cross-exchange matching, divergence detection, and probability checks
+- Liquidity, quality, and efficiency analysis on normalized market data
+- CLI, REST API, and export paths for research workflows
+
 ## The Problem
 
 Prediction markets are a multi-billion dollar asset class with zero open-source analytics infrastructure:
