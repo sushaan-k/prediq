@@ -297,6 +297,16 @@ arbiter/
   examples/               # Runnable examples
 ```
 
+## Demo
+
+Run the offline walkthrough with:
+
+```bash
+uv run python examples/demo.py
+```
+
+For live exchange scanners and research exports, see the larger examples in `examples/`.
+
 ## Development
 
 ```bash
