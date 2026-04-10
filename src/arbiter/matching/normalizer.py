@@ -35,8 +35,32 @@ class PriceNormalizer:
         ExchangeName.MANIFOLD: 0.0,  # Play money, no real fees
     }
 
+    @staticmethod
+    def _is_cents_scale(price: float) -> bool:
+        """Detect whether a price value is in cents (0-100) rather than probability.
+
+        Heuristic: any value > 1.0 is clearly cents. Values that are
+        whole integers in the range [2, 100] are also treated as cents
+        since probability values are almost never exact integers.
+        The value 0.0 and values in (0, 1) are always probability.
+
+        Args:
+            price: The raw price value.
+
+        Returns:
+            True if the price looks like it is in cents.
+        """
+        if price > 1.0:
+            return True
+        # Whole numbers >= 2 are almost certainly cents
+        return price >= 2.0 and price == int(price)
+
     def normalize_price(self, price: float, exchange: ExchangeName) -> float:
         """Normalize a price to the [0, 1] probability scale.
+
+        Kalshi returns prices in cents (0-100 integer range) while other
+        exchanges use probabilities (0.0-1.0). This method detects
+        cents-scale values and converts them.
 
         Args:
             price: Raw price from the exchange.
@@ -45,8 +69,7 @@ class PriceNormalizer:
         Returns:
             Normalized price in [0, 1].
         """
-        if exchange == ExchangeName.KALSHI and price > 1.0:
-            # Kalshi prices may arrive in cents (0-99) -- normalize
+        if exchange == ExchangeName.KALSHI and self._is_cents_scale(price):
             price = price / 100.0
         return min(max(price, 0.0), 1.0)
 
