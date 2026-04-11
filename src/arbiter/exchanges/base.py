@@ -187,6 +187,36 @@ class BaseExchange(abc.ABC):
             An OrderBook snapshot.
         """
 
+    async def health_check(self) -> dict[str, Any]:
+        """Ping the exchange API and return health status.
+
+        Measures round-trip latency to the exchange and returns a
+        dictionary with ``status`` ('ok' or 'error'), ``latency_ms``,
+        and ``exchange`` name.
+
+        Returns:
+            Dictionary with health information.
+        """
+        import time as _time
+
+        start = _time.monotonic()
+        try:
+            await self._get("/")
+            latency = (_time.monotonic() - start) * 1000.0
+            return {
+                "exchange": self.name.value,
+                "status": "ok",
+                "latency_ms": round(latency, 1),
+            }
+        except Exception as exc:
+            latency = (_time.monotonic() - start) * 1000.0
+            return {
+                "exchange": self.name.value,
+                "status": "error",
+                "latency_ms": round(latency, 1),
+                "error": str(exc),
+            }
+
     async def stream_prices(self, market_ids: list[str]) -> AsyncIterator[Market]:
         """Stream real-time price updates via WebSocket.
 

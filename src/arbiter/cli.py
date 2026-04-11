@@ -288,6 +288,49 @@ def serve(
 
 
 @app.command()
+def exchange_status(
+    exchanges: str | None = typer.Option(
+        None,
+        "--exchanges",
+        "-e",
+        help="Comma-separated exchange names (default: all configured)",
+    ),
+) -> None:
+    """Check health and latency of configured exchanges."""
+
+    async def _status() -> None:
+        names = _parse_exchange_names(exchanges) or list(_EXCHANGE_REGISTRY.keys())
+        exchange_list = _build_exchanges(names)
+
+        table = Table(title="Exchange Health Status")
+        table.add_column("Exchange", style="cyan")
+        table.add_column("Status")
+        table.add_column("Latency", justify="right")
+        table.add_column("Error", style="dim")
+
+        for ex in exchange_list:
+            result = await ex.health_check()
+            status_str = (
+                "[green]OK[/green]"
+                if result["status"] == "ok"
+                else "[red]ERROR[/red]"
+            )
+            latency_str = f"{result['latency_ms']:.1f} ms"
+            error_str = result.get("error", "")
+            table.add_row(
+                result["exchange"],
+                status_str,
+                latency_str,
+                error_str[:60] if error_str else "",
+            )
+            await ex.close()
+
+        console.print(table)
+
+    _run_async(_status())
+
+
+@app.command()
 def version() -> None:
     """Show the arbiter version."""
     console.print("arbiter 0.1.0")
