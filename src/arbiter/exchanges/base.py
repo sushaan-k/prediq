@@ -16,6 +16,7 @@ from typing import Any
 import httpx
 
 from arbiter.exceptions import ExchangeConnectionError, ExchangeRateLimitError
+from arbiter.exchanges.pool import ConnectionPool
 from arbiter.models import (
     ExchangeConfig,
     ExchangeName,
@@ -76,14 +77,29 @@ class BaseExchange(abc.ABC):
 
     name: ExchangeName
 
-    def __init__(self, config: ExchangeConfig) -> None:
+    def __init__(
+        self,
+        config: ExchangeConfig,
+        pool: ConnectionPool | None = None,
+    ) -> None:
         self.config = config
+        self._pool = pool
         self._client: httpx.AsyncClient | None = None
         self._rate_limiter = TokenBucketRateLimiter(config.rate_limit_per_second)
         self._closed = False
 
     async def _get_client(self) -> httpx.AsyncClient:
-        """Return the shared HTTP client, creating it if needed."""
+        """Return the shared HTTP client, creating it if needed.
+
+        When a ConnectionPool is configured, the client is obtained from
+        the pool (reusing connections across exchanges that share a base
+        URL). Otherwise a standalone client is created.
+        """
+        if self._pool is not None:
+            return await self._pool.get_client(
+                self.config.base_url,
+                headers=self._build_headers(),
+            )
         if self._client is None or self._client.is_closed:
             headers = self._build_headers()
             self._client = httpx.AsyncClient(
@@ -243,8 +259,15 @@ class BaseExchange(abc.ABC):
             await asyncio.sleep(5.0)
 
     async def close(self) -> None:
-        """Close the HTTP client and release resources."""
+        """Close the HTTP client and release resources.
+
+        When using a ConnectionPool, the pool manages client lifecycle
+        and individual clients are not closed here.
+        """
         self._closed = True
+        if self._pool is not None:
+            # Pool manages client lifecycle; don't close individual clients
+            return
         if self._client and not self._client.is_closed:
             await self._client.aclose()
             self._client = None
