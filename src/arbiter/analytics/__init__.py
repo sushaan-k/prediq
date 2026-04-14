@@ -5,6 +5,7 @@ liquidity analysis, market quality scoring, efficiency metrics,
 and historical divergence tracking.
 """
 
+from arbiter.analytics.consensus import ConsensusAnalyzer
 from arbiter.analytics.divergence import DivergenceDetector
 from arbiter.analytics.efficiency import EfficiencyAnalyzer
 from arbiter.analytics.history import DivergenceHistory
@@ -14,6 +15,7 @@ from arbiter.analytics.resolution import ResolutionTracker
 from arbiter.analytics.violations import ViolationDetector
 
 __all__ = [
+    "ConsensusAnalyzer",
     "DivergenceDetector",
     "DivergenceHistory",
     "EfficiencyAnalyzer",

@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from arbiter.analytics.consensus import ConsensusAnalyzer
 from arbiter.analytics.divergence import DivergenceDetector
 from arbiter.analytics.efficiency import EfficiencyAnalyzer
 from arbiter.analytics.liquidity import LiquidityAnalyzer
@@ -112,6 +113,77 @@ class TestDivergenceDetector:
         divs = detector.detect(pairs)
         assert len(divs) == 2
         assert divs[0].spread > divs[1].spread
+
+
+class TestConsensusAnalyzer:
+    """Tests for cross-exchange consensus summaries."""
+
+    def test_summarize_pair(self, market_pair: MarketPair) -> None:
+        analyzer = ConsensusAnalyzer()
+        summary = analyzer.summarize_pair(market_pair)
+
+        assert summary["event"] == market_pair.market_a.title
+        assert summary["exchange_count"] == 2
+        assert summary["disagreement_band"] == pytest.approx(0.05)
+        assert 0.0 <= summary["consensus_yes_price"] <= 1.0
+
+    def test_summarize_pairs_skips_non_binary(self, now: datetime) -> None:
+        multi = MarketPair(
+            market_a=Market(
+                id="a",
+                exchange=ExchangeName.POLYMARKET,
+                title="Who wins?",
+                contract_type=ContractType.MULTI_OUTCOME,
+                outcomes=[
+                    Outcome(name="Alice", price=0.5),
+                    Outcome(name="Bob", price=0.5),
+                ],
+                fetched_at=now,
+            ),
+            market_b=Market(
+                id="b",
+                exchange=ExchangeName.KALSHI,
+                title="Who wins?",
+                contract_type=ContractType.MULTI_OUTCOME,
+                outcomes=[
+                    Outcome(name="Alice", price=0.6),
+                    Outcome(name="Bob", price=0.4),
+                ],
+                fetched_at=now,
+            ),
+            similarity_score=0.9,
+        )
+        analyzer = ConsensusAnalyzer()
+        assert analyzer.summarize_pairs([multi]) == []
+
+    def test_summarize_pair_requires_both_yes_prices(self, now: datetime) -> None:
+        pair = MarketPair(
+            market_a=Market(
+                id="binary",
+                exchange=ExchangeName.POLYMARKET,
+                title="Binary market",
+                outcomes=[
+                    Outcome(name="Yes", price=0.6),
+                    Outcome(name="No", price=0.4),
+                ],
+                fetched_at=now,
+            ),
+            market_b=Market(
+                id="multi",
+                exchange=ExchangeName.KALSHI,
+                title="Non-binary market",
+                contract_type=ContractType.MULTI_OUTCOME,
+                outcomes=[
+                    Outcome(name="Alice", price=0.6),
+                    Outcome(name="Bob", price=0.4),
+                ],
+                fetched_at=now,
+            ),
+            similarity_score=0.9,
+        )
+
+        with pytest.raises(ValueError, match="binary YES prices"):
+            ConsensusAnalyzer().summarize_pair(pair)
 
 
 # ── Violation Detection ──────────────────────────────────────────────
