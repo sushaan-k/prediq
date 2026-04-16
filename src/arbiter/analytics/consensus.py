@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from statistics import mean
+from typing import cast
 
 from arbiter.models import MarketPair
 
@@ -44,3 +45,21 @@ class ConsensusAnalyzer:
                 continue
             summaries.append(self.summarize_pair(pair))
         return summaries
+
+    def outliers(
+        self,
+        pairs: list[MarketPair],
+        *,
+        min_disagreement: float = 0.05,
+        limit: int | None = None,
+    ) -> list[dict[str, object]]:
+        """Return consensus summaries with large cross-exchange disagreement."""
+        summaries = [
+            summary
+            for summary in self.summarize_pairs(pairs)
+            if cast(float, summary["disagreement_band"]) >= min_disagreement
+        ]
+        summaries.sort(
+            key=lambda item: cast(float, item["disagreement_band"]), reverse=True
+        )
+        return summaries[:limit] if limit is not None else summaries

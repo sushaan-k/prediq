@@ -185,6 +185,44 @@ class TestConsensusAnalyzer:
         with pytest.raises(ValueError, match="binary YES prices"):
             ConsensusAnalyzer().summarize_pair(pair)
 
+    def test_outliers_sort_by_disagreement(self, now: datetime) -> None:
+        pairs = []
+        for idx, (price_a, price_b) in enumerate([(0.55, 0.53), (0.70, 0.52)]):
+            pairs.append(
+                MarketPair(
+                    market_a=Market(
+                        id=f"a-{idx}",
+                        exchange=ExchangeName.POLYMARKET,
+                        title=f"Event {idx}",
+                        outcomes=[
+                            Outcome(name="Yes", price=price_a),
+                            Outcome(name="No", price=1 - price_a),
+                        ],
+                        fetched_at=now,
+                    ),
+                    market_b=Market(
+                        id=f"b-{idx}",
+                        exchange=ExchangeName.KALSHI,
+                        title=f"Event {idx}",
+                        outcomes=[
+                            Outcome(name="Yes", price=price_b),
+                            Outcome(name="No", price=1 - price_b),
+                        ],
+                        fetched_at=now,
+                    ),
+                    similarity_score=0.9,
+                )
+            )
+
+        outliers = ConsensusAnalyzer().outliers(pairs, min_disagreement=0.04, limit=1)
+
+        assert len(outliers) == 1
+        assert outliers[0]["event"] == "Event 1"
+        assert outliers[0]["disagreement_band"] == pytest.approx(0.18)
+
+        unbounded = ConsensusAnalyzer().outliers(pairs, min_disagreement=0.01)
+        assert [item["event"] for item in unbounded] == ["Event 1", "Event 0"]
+
 
 # ── Violation Detection ──────────────────────────────────────────────
 
