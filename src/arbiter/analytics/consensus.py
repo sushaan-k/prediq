@@ -54,6 +54,9 @@ class ConsensusAnalyzer:
         limit: int | None = None,
     ) -> list[dict[str, object]]:
         """Return consensus summaries with large cross-exchange disagreement."""
+        if limit is not None and limit < 0:
+            raise ValueError("limit must be non-negative")
+
         summaries = [
             summary
             for summary in self.summarize_pairs(pairs)

@@ -223,6 +223,11 @@ class TestConsensusAnalyzer:
         unbounded = ConsensusAnalyzer().outliers(pairs, min_disagreement=0.01)
         assert [item["event"] for item in unbounded] == ["Event 1", "Event 0"]
 
+        assert ConsensusAnalyzer().outliers(pairs, min_disagreement=0.5) == []
+        assert ConsensusAnalyzer().outliers(pairs, limit=0) == []
+        with pytest.raises(ValueError, match="limit must be non-negative"):
+            ConsensusAnalyzer().outliers(pairs, limit=-1)
+
 
 # ── Violation Detection ──────────────────────────────────────────────
 
