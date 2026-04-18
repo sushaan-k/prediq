@@ -107,7 +107,9 @@ class TestResolutionTracker:
     def test_brier_score_perfect(self) -> None:
         tracker = ResolutionTracker()
         # Perfect forecast: 1.0 for yes, resolved yes
-        tracker.record(_resolved_market(market_id="p1", yes_price=1.0, resolution="yes"))
+        tracker.record(
+            _resolved_market(market_id="p1", yes_price=1.0, resolution="yes")
+        )
         tracker.record(_resolved_market(market_id="p2", yes_price=0.0, resolution="no"))
         assert tracker.brier_score() == pytest.approx(0.0)
 
@@ -115,7 +117,9 @@ class TestResolutionTracker:
         tracker = ResolutionTracker()
         # Completely wrong forecasts
         tracker.record(_resolved_market(market_id="w1", yes_price=1.0, resolution="no"))
-        tracker.record(_resolved_market(market_id="w2", yes_price=0.0, resolution="yes"))
+        tracker.record(
+            _resolved_market(market_id="w2", yes_price=0.0, resolution="yes")
+        )
         assert tracker.brier_score() == pytest.approx(1.0)
 
     def test_brier_score_empty(self) -> None:
@@ -168,7 +172,9 @@ class TestResolutionTracker:
 
     def test_calibration_nan_for_empty_bucket(self) -> None:
         tracker = ResolutionTracker()
-        tracker.record(_resolved_market(market_id="c1", yes_price=0.10, resolution="no"))
+        tracker.record(
+            _resolved_market(market_id="c1", yes_price=0.10, resolution="no")
+        )
         cal = tracker.calibration(n_buckets=5)
         # Only 0%-20% bucket has data; others should be nan
         assert not math.isnan(cal["0%-20%"])
@@ -179,9 +185,7 @@ class TestResolutionTracker:
         tracker.record(
             _resolved_market(market_id="pm-1", exchange=ExchangeName.POLYMARKET)
         )
-        tracker.record(
-            _resolved_market(market_id="kx-1", exchange=ExchangeName.KALSHI)
-        )
+        tracker.record(_resolved_market(market_id="kx-1", exchange=ExchangeName.KALSHI))
         results = tracker.accuracy_by_exchange()
         assert len(results) == 2
         exchanges = {r.exchange for r in results}

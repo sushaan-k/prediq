@@ -50,10 +50,12 @@ class TestDivergenceHistory:
 
     def test_events_returns_tracked_keys(self) -> None:
         history = DivergenceHistory()
-        history.track([
-            _make_divergence(event="A", outcome="Yes"),
-            _make_divergence(event="B", outcome="No"),
-        ])
+        history.track(
+            [
+                _make_divergence(event="A", outcome="Yes"),
+                _make_divergence(event="B", outcome="No"),
+            ]
+        )
         keys = history.events()
         assert ("A", "Yes") in keys
         assert ("B", "No") in keys

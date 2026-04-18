@@ -164,9 +164,7 @@ class DivergenceHistory:
         """Return all tracked (event, outcome) keys."""
         return list(self._snapshots.keys())
 
-    def snapshots_for(
-        self, event: str, outcome: str
-    ) -> list[DivergenceSnapshot]:
+    def snapshots_for(self, event: str, outcome: str) -> list[DivergenceSnapshot]:
         """Return all snapshots for a given divergence.
 
         Args:

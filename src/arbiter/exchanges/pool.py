@@ -123,9 +123,7 @@ class ConnectionPool:
     @property
     def active_connections(self) -> int:
         """Number of active (non-closed) clients in the pool."""
-        return sum(
-            1 for c in self._clients.values() if not c.is_closed
-        )
+        return sum(1 for c in self._clients.values() if not c.is_closed)
 
     @property
     def is_closed(self) -> bool:

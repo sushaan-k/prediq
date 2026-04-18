@@ -311,9 +311,7 @@ def exchange_status(
         for ex in exchange_list:
             result = await ex.health_check()
             status_str = (
-                "[green]OK[/green]"
-                if result["status"] == "ok"
-                else "[red]ERROR[/red]"
+                "[green]OK[/green]" if result["status"] == "ok" else "[red]ERROR[/red]"
             )
             latency_str = f"{result['latency_ms']:.1f} ms"
             error_str = result.get("error", "")

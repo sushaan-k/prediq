@@ -69,11 +69,7 @@ class ResolutionTracker:
 
         yes_price = market.yes_price
         forecast = yes_price if yes_price is not None else 0.5
-        outcome = (
-            1.0
-            if market.resolution.lower() in ("yes", "y", "true", "1")
-            else 0.0
-        )
+        outcome = 1.0 if market.resolution.lower() in ("yes", "y", "true", "1") else 0.0
 
         resolved_at = market.resolved_at or datetime.now(UTC)
 

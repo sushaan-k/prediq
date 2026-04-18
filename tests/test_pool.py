@@ -93,7 +93,5 @@ class TestConnectionPool:
     async def test_headers_passed_to_client(self) -> None:
         async with ConnectionPool() as pool:
             headers = {"Authorization": "Bearer test123"}
-            client = await pool.get_client(
-                "https://example.com", headers=headers
-            )
+            client = await pool.get_client("https://example.com", headers=headers)
             assert client.headers.get("authorization") == "Bearer test123"
