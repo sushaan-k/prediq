@@ -234,6 +234,90 @@ class TestViolationsCommand:
         assert "Multi-Outcome Violations" in result.output
 
 
+# ── consensus command ────────────────────────────────────────────────────
+
+
+class TestConsensusCommand:
+    @patch("arbiter.engine.Arbiter")
+    def test_consensus_with_disagreements(self, mock_arbiter_cls: AsyncMock) -> None:
+        rows = [
+            {
+                "event": "Will BTC hit 200K?",
+                "consensus_yes_price": 0.61,
+                "simple_average_yes_price": 0.565,
+                "disagreement_band": 0.15,
+                "exchange_count": 2,
+                "total_liquidity": 100_000.0,
+            }
+        ]
+        mock_arb = _make_mock_arbiter(consensus=AsyncMock(return_value=rows))
+        mock_arbiter_cls.return_value = mock_arb
+
+        result = runner.invoke(
+            app,
+            [
+                "consensus",
+                "--min-disagreement",
+                "0.03",
+                "--limit",
+                "5",
+                "--market-limit",
+                "25",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert "Consensus Price Disagreements" in result.output
+        assert "Will BTC hit 200K" in result.output
+        mock_arb.consensus.assert_awaited_once_with(
+            min_disagreement=0.03,
+            limit=5,
+            market_limit=25,
+        )
+
+    @patch("arbiter.engine.Arbiter")
+    def test_consensus_json_output(self, mock_arbiter_cls: AsyncMock) -> None:
+        rows = [
+            {
+                "event": "Fed cut",
+                "consensus_yes_price": 0.52,
+                "simple_average_yes_price": 0.50,
+                "disagreement_band": 0.08,
+                "exchange_count": 2,
+                "total_liquidity": 25_000.0,
+            }
+        ]
+        mock_arb = _make_mock_arbiter(consensus=AsyncMock(return_value=rows))
+        mock_arbiter_cls.return_value = mock_arb
+
+        result = runner.invoke(app, ["consensus", "--json"])
+
+        assert result.exit_code == 0
+        assert '"event": "Fed cut"' in result.output
+
+    @patch("arbiter.engine.Arbiter")
+    def test_consensus_no_results(self, mock_arbiter_cls: AsyncMock) -> None:
+        mock_arb = _make_mock_arbiter(consensus=AsyncMock(return_value=[]))
+        mock_arbiter_cls.return_value = mock_arb
+
+        result = runner.invoke(app, ["consensus"])
+
+        assert result.exit_code == 0
+        assert "No consensus disagreements" in result.output
+
+    @patch("arbiter.engine.Arbiter")
+    def test_consensus_error_handling(self, mock_arbiter_cls: AsyncMock) -> None:
+        mock_arb = _make_mock_arbiter(
+            consensus=AsyncMock(side_effect=RuntimeError("fetch failed"))
+        )
+        mock_arbiter_cls.return_value = mock_arb
+
+        result = runner.invoke(app, ["consensus"])
+
+        assert result.exit_code == 0
+        assert "Error" in result.output
+
+
 # ── export command ───────────────────────────────────────────────────────
 
 

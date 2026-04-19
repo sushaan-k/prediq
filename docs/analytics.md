@@ -12,6 +12,7 @@ The current analytics surface centers on:
 - liquidity profiles
 - market quality scores
 - efficiency metrics
+- consensus price disagreement rankings
 
 Relevant modules live under `src/arbiter/analytics/`.
 
@@ -37,6 +38,33 @@ Divergence records include fields such as:
 
 Use this when searching for obvious cross-market inefficiencies or tracking how
 often venues disagree.
+
+## Consensus Price Disagreements
+
+Consensus analysis builds a liquidity-weighted YES-price view for matched
+binary markets and ranks the markets where venues disagree most.
+
+```python
+rows = await arb.consensus(min_disagreement=0.05, limit=20)
+```
+
+Each row includes:
+
+- event
+- liquidity-weighted consensus YES price
+- simple average YES price
+- disagreement band
+- total liquidity used for weighting
+
+The same workflow is available from the CLI:
+
+```bash
+arbiter consensus --min-disagreement 0.05 --limit 20
+arbiter consensus --json
+```
+
+Use this when you want a venue-neutral price estimate or a quick outlier list
+without treating every price gap as an executable trade.
 
 ## Probability Violations
 
@@ -103,6 +131,7 @@ Most analytics are available through:
 
 - Python `Arbiter` methods
 - CLI commands such as `scan`, `violations`, and `export`
+- the `consensus` CLI command for disagreement-ranked matched markets
 - API endpoints exposed by `arbiter serve`
 
 ## Practical Workflow

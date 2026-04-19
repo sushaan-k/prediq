@@ -62,6 +62,9 @@ async with Arbiter(
     # Probability violations (YES + NO != 1.0)
     binary_v, multi_v = await arb.violations()
 
+    # Liquidity-weighted consensus prices ranked by disagreement
+    consensus_rows = await arb.consensus(min_disagreement=0.05, limit=20)
+
     # Liquidity analysis with price impact estimation
     liq = await arb.liquidity("polymarket", market_id="...")
 
@@ -113,6 +116,9 @@ prediq scan --limit 25
 
 # Detect probability violations
 prediq violations --json
+
+# Rank consensus price disagreements
+prediq consensus --min-disagreement 0.05 --limit 20
 
 # Export data
 prediq export markets.parquet
@@ -243,6 +249,7 @@ MarketQuality(
 | `fetch_all_markets()` | Fetch markets from all exchanges in parallel |
 | `match_markets()` | Find equivalent markets across exchanges |
 | `divergences(min_spread, min_liquidity, limit)` | Detect cross-exchange price divergences |
+| `consensus(min_disagreement, limit, market_limit)` | Rank liquidity-weighted consensus price disagreements |
 | `violations()` | Find probability violations |
 | `liquidity(exchange, market_id)` | Analyze order book liquidity |
 | `quality(exchange, category)` | Compute market quality scores for a configured exchange |

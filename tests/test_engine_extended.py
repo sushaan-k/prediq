@@ -115,6 +115,84 @@ class TestArbiterQuality:
         await arb.close()
 
 
+class TestArbiterConsensus:
+    @pytest.mark.asyncio
+    async def test_consensus_ranks_matched_market_disagreements(
+        self, now: datetime
+    ) -> None:
+        pm_markets = [
+            Market(
+                id="pm-btc",
+                exchange=ExchangeName.POLYMARKET,
+                title="Will Bitcoin hit 200K in 2026?",
+                outcomes=[
+                    Outcome(name="Yes", price=0.64, volume=0.0),
+                    Outcome(name="No", price=0.36, volume=0.0),
+                ],
+                volume_total=80_000.0,
+                fetched_at=now,
+            ),
+            Market(
+                id="pm-eth",
+                exchange=ExchangeName.POLYMARKET,
+                title="Will Ethereum hit 10K in 2026?",
+                outcomes=[
+                    Outcome(name="Yes", price=0.44, volume=0.0),
+                    Outcome(name="No", price=0.56, volume=0.0),
+                ],
+                volume_total=30_000.0,
+                fetched_at=now,
+            ),
+        ]
+        kx_markets = [
+            Market(
+                id="kx-btc",
+                exchange=ExchangeName.KALSHI,
+                title="Will Bitcoin hit 200K in 2026?",
+                outcomes=[
+                    Outcome(name="Yes", price=0.49, volume=0.0),
+                    Outcome(name="No", price=0.51, volume=0.0),
+                ],
+                volume_total=20_000.0,
+                fetched_at=now,
+            ),
+            Market(
+                id="kx-eth",
+                exchange=ExchangeName.KALSHI,
+                title="Will Ethereum hit 10K in 2026?",
+                outcomes=[
+                    Outcome(name="Yes", price=0.42, volume=0.0),
+                    Outcome(name="No", price=0.58, volume=0.0),
+                ],
+                volume_total=20_000.0,
+                fetched_at=now,
+            ),
+        ]
+        pm_mock = _make_mock_exchange(ExchangeName.POLYMARKET, pm_markets)
+        kx_mock = _make_mock_exchange(ExchangeName.KALSHI, kx_markets)
+        arb = Arbiter(exchanges=[pm_mock, kx_mock])
+
+        rows = await arb.consensus(
+            min_disagreement=0.03,
+            limit=1,
+            market_limit=25,
+        )
+
+        assert len(rows) == 1
+        assert rows[0]["event"] == "Will Bitcoin hit 200K in 2026?"
+        assert rows[0]["disagreement_band"] == pytest.approx(0.15)
+        assert rows[0]["consensus_yes_price"] == pytest.approx(0.61)
+        pm_mock.fetch_markets.assert_awaited_once_with(active_only=True, limit=25)
+        kx_mock.fetch_markets.assert_awaited_once_with(active_only=True, limit=25)
+        await arb.close()
+
+    @pytest.mark.asyncio
+    async def test_consensus_rejects_negative_disagreement(self) -> None:
+        arb = Arbiter(exchanges=[])
+        with pytest.raises(ValueError, match="min_disagreement must be non-negative"):
+            await arb.consensus(min_disagreement=-0.01)
+
+
 class TestArbiterExportDataset:
     @pytest.mark.asyncio
     async def test_export_dataset(self, now: datetime, tmp_path: Path) -> None:

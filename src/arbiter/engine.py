@@ -11,6 +11,7 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator
 
+from arbiter.analytics.consensus import ConsensusAnalyzer
 from arbiter.analytics.divergence import DivergenceDetector
 from arbiter.analytics.efficiency import EfficiencyAnalyzer
 from arbiter.analytics.liquidity import LiquidityAnalyzer
@@ -75,6 +76,7 @@ class Arbiter:
         self._exchanges: list[BaseExchange] = exchanges or []
         self._matcher = SemanticMatcher(similarity_threshold=similarity_threshold)
         self._normalizer = PriceNormalizer()
+        self._consensus_analyzer = ConsensusAnalyzer()
         self._divergence_detector = DivergenceDetector()
         self._violation_detector = ViolationDetector()
         self._liquidity_analyzer = LiquidityAnalyzer()
@@ -186,6 +188,36 @@ class Arbiter:
 
         logger.info("Found %d matched market pairs", len(all_pairs))
         return all_pairs
+
+    async def consensus(
+        self,
+        min_disagreement: float = 0.0,
+        limit: int | None = None,
+        market_limit: int = 100,
+    ) -> list[dict[str, object]]:
+        """Summarize cross-exchange consensus prices for matched markets.
+
+        Fetches markets, matches equivalent binary markets across exchanges, and
+        returns liquidity-weighted consensus YES prices sorted by disagreement.
+
+        Args:
+            min_disagreement: Minimum absolute YES-price gap to include.
+            limit: Maximum number of summaries to return. ``None`` returns all.
+            market_limit: Maximum markets to fetch per exchange before matching.
+
+        Returns:
+            Consensus summary dictionaries sorted by disagreement descending.
+        """
+        if min_disagreement < 0:
+            raise ValueError("min_disagreement must be non-negative")
+
+        markets_by_exchange = await self.fetch_all_markets(limit=market_limit)
+        pairs = self.match_markets(markets_by_exchange)
+        return self._consensus_analyzer.outliers(
+            pairs,
+            min_disagreement=min_disagreement,
+            limit=limit,
+        )
 
     async def divergences(
         self,

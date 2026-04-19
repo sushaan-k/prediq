@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import Coroutine
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 import typer
 from rich.console import Console
@@ -225,6 +225,88 @@ def violations(
                 console.print(table)
 
     _run_async(_violations())
+
+
+@app.command()
+def consensus(
+    min_disagreement: float = typer.Option(
+        0.05,
+        "--min-disagreement",
+        "-d",
+        help="Minimum YES-price disagreement to include",
+    ),
+    limit: int = typer.Option(
+        20,
+        "--limit",
+        "-n",
+        help="Maximum consensus rows to display",
+    ),
+    market_limit: int = typer.Option(
+        50,
+        "--market-limit",
+        help="Max markets to fetch per exchange before matching",
+    ),
+    output_json: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+    exchanges: str | None = typer.Option(
+        None,
+        "--exchanges",
+        "-e",
+        help="Comma-separated exchange names (default: polymarket,manifold)",
+    ),
+) -> None:
+    """Rank matched markets by cross-exchange consensus disagreement."""
+
+    async def _consensus() -> None:
+        from arbiter.engine import Arbiter
+
+        exchange_list = _build_exchanges(_parse_exchange_names(exchanges))
+
+        async with Arbiter(exchanges=exchange_list) as arb:
+            console.print("[bold]Building consensus price view...[/bold]")
+
+            try:
+                rows = await arb.consensus(
+                    min_disagreement=min_disagreement,
+                    limit=limit,
+                    market_limit=market_limit,
+                )
+            except Exception as exc:
+                console.print(f"[red]Error: {exc}[/red]")
+                return
+
+            if output_json:
+                console.print(json.dumps(rows, indent=2))
+                return
+
+            if not rows:
+                console.print(
+                    "[yellow]No consensus disagreements found above threshold.[/yellow]"
+                )
+                return
+
+            table = Table(title="Consensus Price Disagreements")
+            table.add_column("Event", style="cyan", max_width=44)
+            table.add_column("Consensus YES", justify="right", style="green")
+            table.add_column("Avg YES", justify="right")
+            table.add_column("Disagreement", justify="right", style="bold red")
+            table.add_column("Liquidity", justify="right")
+
+            for row in rows:
+                consensus_yes = cast(float, row["consensus_yes_price"])
+                average_yes = cast(float, row["simple_average_yes_price"])
+                disagreement = cast(float, row["disagreement_band"])
+                total_liquidity = cast(float, row["total_liquidity"])
+                table.add_row(
+                    str(row["event"])[:44],
+                    f"{consensus_yes:.1%}",
+                    f"{average_yes:.1%}",
+                    f"{disagreement:.1%}",
+                    f"${total_liquidity:,.0f}",
+                )
+
+            console.print(table)
+
+    _run_async(_consensus())
 
 
 @app.command()
