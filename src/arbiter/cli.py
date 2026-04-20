@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import Coroutine
+from pathlib import Path
 from typing import Any, TypeVar, cast
 
 import typer
@@ -16,6 +17,7 @@ from rich.console import Console
 from rich.table import Table
 
 from arbiter.exchanges.base import BaseExchange
+from arbiter.output.snapshot import MarketSnapshot, SnapshotAnalysis, analyze_snapshot
 
 app = typer.Typer(
     name="arbiter",
@@ -77,6 +79,52 @@ def _parse_exchange_names(raw: str | None) -> list[str] | None:
     if raw is None:
         return None
     return [s.strip() for s in raw.split(",") if s.strip()]
+
+
+def _print_snapshot_analysis(analysis: SnapshotAnalysis) -> None:
+    """Render a concise replay summary to the console."""
+    summary = Table(title="Snapshot Replay Summary")
+    summary.add_column("Metric")
+    summary.add_column("Value", justify="right")
+    summary.add_row("Markets", str(analysis.market_count))
+    summary.add_row("Matched pairs", str(analysis.pair_count))
+    summary.add_row("Divergences", str(len(analysis.divergences)))
+    summary.add_row("Binary violations", str(len(analysis.binary_violations)))
+    summary.add_row(
+        "Multi-outcome violations", str(len(analysis.multi_outcome_violations))
+    )
+    summary.add_row("Consensus disagreements", str(len(analysis.consensus)))
+    console.print(summary)
+
+    if analysis.exchange_counts:
+        exchanges_table = Table(title="Snapshot Exchanges")
+        exchanges_table.add_column("Exchange", style="cyan")
+        exchanges_table.add_column("Markets", justify="right")
+        for exchange, count in sorted(analysis.exchange_counts.items()):
+            exchanges_table.add_row(exchange, str(count))
+        console.print(exchanges_table)
+
+    if analysis.divergences:
+        div_table = Table(title="Top Snapshot Divergences")
+        div_table.add_column("Event", style="cyan", max_width=44)
+        div_table.add_column("Outcome")
+        div_table.add_column("Exchange A")
+        div_table.add_column("Price A", justify="right")
+        div_table.add_column("Exchange B")
+        div_table.add_column("Price B", justify="right")
+        div_table.add_column("Spread", justify="right", style="bold red")
+
+        for div in analysis.divergences[:10]:
+            div_table.add_row(
+                div.event[:44],
+                div.outcome,
+                div.exchange_a.value,
+                f"{div.price_a:.1%}",
+                div.exchange_b.value,
+                f"{div.price_b:.1%}",
+                f"{div.spread:.1%}",
+            )
+        console.print(div_table)
 
 
 @app.command()
@@ -353,6 +401,112 @@ def export(
             )
 
     _run_async(_export())
+
+
+@app.command()
+def snapshot(
+    output_path: str = typer.Argument(help="Output snapshot JSON path"),
+    limit: int = typer.Option(
+        50,
+        "--limit",
+        "-n",
+        help="Max markets to fetch per exchange",
+    ),
+    include_inactive: bool = typer.Option(
+        False,
+        "--include-inactive",
+        help="Include closed/resolved markets when exchanges support it",
+    ),
+    exchanges: str | None = typer.Option(
+        None,
+        "--exchanges",
+        "-e",
+        help="Comma-separated exchange names (default: polymarket,manifold)",
+    ),
+) -> None:
+    """Write normalized live markets to a portable replay snapshot."""
+
+    async def _snapshot() -> None:
+        from arbiter.engine import Arbiter
+
+        exchange_list = _build_exchanges(_parse_exchange_names(exchanges))
+
+        async with Arbiter(exchanges=exchange_list) as arb:
+            console.print("[bold]Fetching markets for snapshot...[/bold]")
+
+            try:
+                market_snapshot = await arb.market_snapshot(
+                    active_only=not include_inactive,
+                    limit=limit,
+                )
+            except Exception as exc:
+                console.print(f"[red]Error: {exc}[/red]")
+                return
+
+            path = market_snapshot.write(output_path)
+            console.print(
+                "[green]"
+                f"Wrote {market_snapshot.market_count} markets from "
+                f"{len(market_snapshot.exchange_counts)} exchanges to {path}"
+                "[/green]"
+            )
+
+    _run_async(_snapshot())
+
+
+@app.command()
+def replay(
+    snapshot_path: str = typer.Argument(help="Snapshot JSON path to replay"),
+    min_spread: float = typer.Option(
+        0.02,
+        "--min-spread",
+        "-s",
+        help="Minimum divergence spread to include",
+    ),
+    min_disagreement: float = typer.Option(
+        0.05,
+        "--min-disagreement",
+        "-d",
+        help="Minimum consensus disagreement to include",
+    ),
+    consensus_limit: int | None = typer.Option(
+        20,
+        "--consensus-limit",
+        help="Maximum consensus rows to include; use 0 for none",
+    ),
+    output_json: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+    markdown_output: str | None = typer.Option(
+        None,
+        "--markdown-output",
+        help="Optional Markdown report output path",
+    ),
+) -> None:
+    """Replay analytics from a saved snapshot without calling exchanges."""
+
+    try:
+        market_snapshot = MarketSnapshot.from_file(snapshot_path)
+        limit = None if consensus_limit is None else max(0, consensus_limit)
+        analysis = analyze_snapshot(
+            market_snapshot,
+            min_spread=min_spread,
+            min_disagreement=min_disagreement,
+            consensus_limit=limit,
+        )
+    except Exception as exc:
+        console.print(f"[red]Error: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    if markdown_output is not None:
+        output_path = Path(markdown_output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(analysis.to_markdown())
+        console.print(f"[green]Wrote replay report to {output_path}[/green]")
+
+    if output_json:
+        console.print(json.dumps(analysis.model_dump(mode="json"), indent=2))
+        return
+
+    _print_snapshot_analysis(analysis)
 
 
 @app.command()

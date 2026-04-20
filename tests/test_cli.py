@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -15,6 +16,7 @@ from arbiter.models import (
     Outcome,
     ProbabilityViolation,
 )
+from arbiter.output.snapshot import MarketSnapshot
 
 runner = CliRunner()
 
@@ -405,6 +407,122 @@ class TestExportCommand:
         result = runner.invoke(app, ["export", out])
         assert result.exit_code == 0
         assert "Error" in result.output
+
+
+# ── snapshot / replay commands ───────────────────────────────────────────
+
+
+class TestSnapshotCommands:
+    @patch("arbiter.cli._build_exchanges", return_value=[])
+    @patch("arbiter.engine.Arbiter")
+    def test_snapshot_writes_market_snapshot(
+        self,
+        mock_arbiter_cls: AsyncMock,
+        _mock_build_exchanges: AsyncMock,
+        tmp_path: Path,
+    ) -> None:
+        market_snapshot = MarketSnapshot.from_markets(
+            {
+                "manifold": [
+                    Market(
+                        id="m-1",
+                        exchange=ExchangeName.MANIFOLD,
+                        title="Snapshot test",
+                        outcomes=[
+                            Outcome(name="Yes", price=0.55, volume=0.0),
+                            Outcome(name="No", price=0.45, volume=0.0),
+                        ],
+                        fetched_at=datetime.now(UTC),
+                    )
+                ]
+            },
+            generated_at="2026-05-22T12:00:00+00:00",
+        )
+        mock_arb = _make_mock_arbiter(
+            market_snapshot=AsyncMock(return_value=market_snapshot)
+        )
+        mock_arbiter_cls.return_value = mock_arb
+
+        out = str(tmp_path / "markets.snapshot.json")
+        result = runner.invoke(app, ["snapshot", out, "--limit", "7"])
+
+        assert result.exit_code == 0
+        assert "Wrote 1 markets" in result.output
+        assert Path(out).exists()
+        mock_arb.market_snapshot.assert_awaited_once_with(active_only=True, limit=7)
+
+    def test_replay_snapshot_json_output(self, tmp_path: Path) -> None:
+        snapshot_path = tmp_path / "markets.snapshot.json"
+        MarketSnapshot.from_markets(
+            {
+                "polymarket": [
+                    Market(
+                        id="pm-btc",
+                        exchange=ExchangeName.POLYMARKET,
+                        title="Will Bitcoin hit 200K in 2026?",
+                        outcomes=[
+                            Outcome(name="Yes", price=0.65, volume=10_000.0),
+                            Outcome(name="No", price=0.44, volume=10_000.0),
+                        ],
+                        fetched_at=datetime.now(UTC),
+                    )
+                ],
+                "kalshi": [
+                    Market(
+                        id="kx-btc",
+                        exchange=ExchangeName.KALSHI,
+                        title="Will Bitcoin hit 200K in 2026?",
+                        outcomes=[
+                            Outcome(name="Yes", price=0.48, volume=10_000.0),
+                            Outcome(name="No", price=0.52, volume=10_000.0),
+                        ],
+                        fetched_at=datetime.now(UTC),
+                    )
+                ],
+            },
+            generated_at="2026-05-22T12:00:00+00:00",
+        ).write(snapshot_path)
+
+        result = runner.invoke(app, ["replay", str(snapshot_path), "--json"])
+
+        assert result.exit_code == 0
+        assert '"pair_count": 1' in result.output
+        assert '"divergences"' in result.output
+
+    def test_replay_snapshot_markdown_output(self, tmp_path: Path) -> None:
+        snapshot_path = tmp_path / "markets.snapshot.json"
+        report_path = tmp_path / "report.md"
+        MarketSnapshot.from_markets(
+            {
+                "manifold": [
+                    Market(
+                        id="m-1",
+                        exchange=ExchangeName.MANIFOLD,
+                        title="Will the Fed cut rates in June?",
+                        outcomes=[
+                            Outcome(name="Yes", price=0.52, volume=0.0),
+                            Outcome(name="No", price=0.48, volume=0.0),
+                        ],
+                        fetched_at=datetime.now(UTC),
+                    )
+                ]
+            },
+            generated_at="2026-05-22T12:00:00+00:00",
+        ).write(snapshot_path)
+
+        result = runner.invoke(
+            app,
+            [
+                "replay",
+                str(snapshot_path),
+                "--markdown-output",
+                str(report_path),
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert "Snapshot Replay Summary" in result.output
+        assert "Arbiter Snapshot Replay" in report_path.read_text()
 
 
 # ── serve command ────────────────────────────────────────────────────────

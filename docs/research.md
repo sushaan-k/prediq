@@ -66,6 +66,22 @@ The exported dataset is a better fit than ad hoc API scraping when you want to:
 - compare runs over time
 - share a reproducible artifact with collaborators
 
+## Snapshot Replay
+
+Use JSON snapshots when you need to preserve the exact normalized markets that
+fed an analysis run and replay arbiter's analytics later without exchange API
+calls.
+
+```bash
+arbiter snapshot markets.snapshot.json --exchanges polymarket,manifold --limit 100
+arbiter replay markets.snapshot.json --min-spread 0.03 --markdown-output replay.md
+```
+
+Replay computes matched pairs, price divergences, binary and multi-outcome
+probability violations, and consensus disagreement rankings from the saved
+snapshot. This is useful for CI fixtures, bug reports, and paper appendices
+where a portable JSON artifact is easier to audit than a live API dependency.
+
 ## Monitoring and API Snapshots
 
 For repeated collection you can use:

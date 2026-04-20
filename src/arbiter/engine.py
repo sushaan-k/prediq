@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 
 from arbiter.analytics.consensus import ConsensusAnalyzer
 from arbiter.analytics.divergence import DivergenceDetector
@@ -34,6 +35,7 @@ from arbiter.models import (
 )
 from arbiter.output.alerts import AlertManager
 from arbiter.output.export import DataExporter
+from arbiter.output.snapshot import MarketSnapshot, SnapshotAnalysis, analyze_snapshot
 from arbiter.storage import Storage
 
 logger = logging.getLogger(__name__)
@@ -420,6 +422,56 @@ class Arbiter:
 
         result_path = self._exporter.export_markets_to_parquet(all_markets, path)
         return str(result_path)
+
+    async def market_snapshot(
+        self,
+        active_only: bool = True,
+        limit: int = 100,
+    ) -> MarketSnapshot:
+        """Fetch markets and package them as a portable replay snapshot.
+
+        Args:
+            active_only: Only fetch active markets.
+            limit: Per-exchange market limit.
+
+        Returns:
+            MarketSnapshot containing normalized markets grouped by exchange.
+        """
+        markets = await self.fetch_all_markets(active_only=active_only, limit=limit)
+        return MarketSnapshot.from_markets(
+            markets,
+            generated_at=datetime.now(UTC).isoformat(),
+        )
+
+    def analyze_snapshot(
+        self,
+        snapshot: MarketSnapshot,
+        *,
+        min_spread: float = 0.02,
+        min_liquidity: float = 0.0,
+        min_disagreement: float = 0.05,
+        consensus_limit: int | None = None,
+    ) -> SnapshotAnalysis:
+        """Replay analytics against a previously captured market snapshot.
+
+        Args:
+            snapshot: Portable market snapshot to analyze.
+            min_spread: Minimum divergence spread to include.
+            min_liquidity: Minimum dollar liquidity to consider.
+            min_disagreement: Minimum consensus disagreement to include.
+            consensus_limit: Maximum consensus rows to include.
+
+        Returns:
+            SnapshotAnalysis with offline divergence, violation, and consensus data.
+        """
+        return analyze_snapshot(
+            snapshot,
+            similarity_threshold=self._matcher.threshold,
+            min_spread=min_spread,
+            min_liquidity=min_liquidity,
+            min_disagreement=min_disagreement,
+            consensus_limit=consensus_limit,
+        )
 
     def _get_exchange(self, name: str) -> BaseExchange:
         """Look up an exchange connector by name.

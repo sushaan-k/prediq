@@ -120,6 +120,12 @@ prediq violations --json
 # Rank consensus price disagreements
 prediq consensus --min-disagreement 0.05 --limit 20
 
+# Capture normalized markets for reproducible offline analysis
+prediq snapshot markets.snapshot.json --limit 100
+
+# Replay analytics from a snapshot without calling exchange APIs
+prediq replay markets.snapshot.json --min-spread 0.03 --markdown-output replay.md
+
 # Export data
 prediq export markets.parquet
 
@@ -239,6 +245,21 @@ MarketQuality(
     manipulation_score=0.12,  # 0 = clean, 1 = severe
 )
 ```
+
+### Reproducible Snapshot Replay
+
+Research and CI workflows can capture normalized markets once and replay the
+analytics stack later without depending on live exchange APIs:
+
+```bash
+prediq snapshot markets.snapshot.json --exchanges polymarket,manifold --limit 100
+prediq replay markets.snapshot.json --json
+```
+
+Snapshots preserve the normalized market schema grouped by exchange. Replay
+runs matching, divergence detection, probability-violation checks, and
+consensus disagreement ranking against that file, making bugs and research
+results easier to reproduce.
 
 ## API Reference
 
